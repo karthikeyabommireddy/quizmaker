@@ -32,6 +32,7 @@ export function QuizAttempt({ quiz, onEnd }: QuizAttemptProps) {
     message: string;
     explanation: string;
   } | null>(null);
+  const [submittedAnswers, setSubmittedAnswers] = useState<Set<string>>(new Set());
   const [quizCompleted, setQuizCompleted] = useState(false);
   const [loading, setLoading] = useState(true);
 
@@ -89,11 +90,27 @@ export function QuizAttempt({ quiz, onEnd }: QuizAttemptProps) {
   const currentQuestion = questions[currentIndex];
 
   const handleAnswer = (answer: any) => {
+    // Don't allow changing answer after submission
+    if (submittedAnswers.has(currentQuestion.id)) {
+      return;
+    }
+    
     setAnswers({
       ...answers,
       [currentQuestion.id]: answer,
     });
+  };
 
+  const handleSubmitAnswer = () => {
+    const answer = answers[currentQuestion.id];
+    if (!answer && answer !== 0) {
+      return; // No answer selected
+    }
+
+    // Mark this question as submitted
+    setSubmittedAnswers(new Set(submittedAnswers).add(currentQuestion.id));
+
+    // Check answer and show feedback
     if (quiz.show_feedback === 'immediate') {
       checkAnswer(answer);
     }
@@ -322,27 +339,48 @@ export function QuizAttempt({ quiz, onEnd }: QuizAttemptProps) {
           <div className="space-y-3 mb-8">
             {currentQuestion.question_type === 'single_select' && (
               <>
-                {currentQuestion.question_options.map((option) => (
-                  <label
-                    key={option.id}
-                    className={`block p-4 border-2 rounded-lg cursor-pointer transition ${
-                      answers[currentQuestion.id] === option.id
-                        ? 'border-blue-600 bg-blue-50'
-                        : 'border-gray-300 hover:border-gray-400'
-                    }`}
-                  >
-                    <div className="flex items-center gap-3">
-                      <input
-                        type="radio"
-                        name={currentQuestion.id}
-                        checked={answers[currentQuestion.id] === option.id}
-                        onChange={() => handleAnswer(option.id)}
-                        className="w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500"
-                      />
-                      <span className="text-gray-900">{option.option_text}</span>
-                    </div>
-                  </label>
-                ))}
+                {currentQuestion.question_options.map((option) => {
+                  const isSubmitted = submittedAnswers.has(currentQuestion.id);
+                  const isSelected = answers[currentQuestion.id] === option.id;
+                  const isCorrect = option.is_correct;
+                  
+                  return (
+                    <label
+                      key={option.id}
+                      className={`block p-4 border-2 rounded-lg transition ${
+                        isSubmitted
+                          ? isCorrect
+                            ? 'border-green-500 bg-green-50'
+                            : isSelected
+                            ? 'border-red-500 bg-red-50'
+                            : 'border-gray-300 bg-gray-50'
+                          : isSelected
+                          ? 'border-blue-600 bg-blue-50 cursor-pointer'
+                          : 'border-gray-300 hover:border-gray-400 cursor-pointer'
+                      } ${isSubmitted ? 'cursor-not-allowed' : ''}`}
+                    >
+                      <div className="flex items-center gap-3">
+                        <input
+                          type="radio"
+                          name={currentQuestion.id}
+                          checked={isSelected}
+                          onChange={() => handleAnswer(option.id)}
+                          disabled={isSubmitted}
+                          className="w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500 disabled:opacity-50"
+                        />
+                        <div className="flex-1 flex items-center justify-between">
+                          <span className="text-gray-900">{option.option_text}</span>
+                          {isSubmitted && isCorrect && (
+                            <CheckCircle className="w-5 h-5 text-green-600" />
+                          )}
+                          {isSubmitted && !isCorrect && isSelected && (
+                            <XCircle className="w-5 h-5 text-red-600" />
+                          )}
+                        </div>
+                      </div>
+                    </label>
+                  );
+                })}
               </>
             )}
 
@@ -351,15 +389,23 @@ export function QuizAttempt({ quiz, onEnd }: QuizAttemptProps) {
                 {currentQuestion.question_options.map((option) => {
                   const currentAnswers = (answers[currentQuestion.id] || []) as string[];
                   const isSelected = currentAnswers.includes(option.id);
+                  const isSubmitted = submittedAnswers.has(currentQuestion.id);
+                  const isCorrect = option.is_correct;
 
                   return (
                     <label
                       key={option.id}
-                      className={`block p-4 border-2 rounded-lg cursor-pointer transition ${
-                        isSelected
-                          ? 'border-blue-600 bg-blue-50'
-                          : 'border-gray-300 hover:border-gray-400'
-                      }`}
+                      className={`block p-4 border-2 rounded-lg transition ${
+                        isSubmitted
+                          ? isCorrect
+                            ? 'border-green-500 bg-green-50'
+                            : isSelected && !isCorrect
+                            ? 'border-red-500 bg-red-50'
+                            : 'border-gray-300 bg-gray-50'
+                          : isSelected
+                          ? 'border-blue-600 bg-blue-50 cursor-pointer'
+                          : 'border-gray-300 hover:border-gray-400 cursor-pointer'
+                      } ${isSubmitted ? 'cursor-not-allowed' : ''}`}
                     >
                       <div className="flex items-center gap-3">
                         <input
@@ -371,9 +417,18 @@ export function QuizAttempt({ quiz, onEnd }: QuizAttemptProps) {
                               : currentAnswers.filter(id => id !== option.id);
                             handleAnswer(newAnswers);
                           }}
-                          className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                          disabled={isSubmitted}
+                          className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 disabled:opacity-50"
                         />
-                        <span className="text-gray-900">{option.option_text}</span>
+                        <div className="flex-1 flex items-center justify-between">
+                          <span className="text-gray-900">{option.option_text}</span>
+                          {isSubmitted && isCorrect && (
+                            <CheckCircle className="w-5 h-5 text-green-600" />
+                          )}
+                          {isSubmitted && !isCorrect && isSelected && (
+                            <XCircle className="w-5 h-5 text-red-600" />
+                          )}
+                        </div>
                       </div>
                     </label>
                   );
@@ -420,22 +475,33 @@ export function QuizAttempt({ quiz, onEnd }: QuizAttemptProps) {
               Previous
             </button>
 
-            {currentIndex === questions.length - 1 ? (
-              <button
-                onClick={handleSubmitQuiz}
-                className="flex items-center gap-2 px-6 py-2.5 bg-green-600 text-white rounded-lg hover:bg-green-700 transition"
-              >
-                Submit Quiz
-              </button>
-            ) : (
-              <button
-                onClick={handleNext}
-                className="flex items-center gap-2 px-6 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
-              >
-                Next
-                <ArrowRight className="w-4 h-4" />
-              </button>
-            )}
+            <div className="flex items-center gap-3">
+              {!submittedAnswers.has(currentQuestion.id) ? (
+                <button
+                  onClick={handleSubmitAnswer}
+                  disabled={!answers[currentQuestion.id] && answers[currentQuestion.id] !== 0}
+                  className="flex items-center gap-2 px-6 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition disabled:opacity-50 disabled:cursor-not-allowed shadow-md"
+                >
+                  <CheckCircle className="w-4 h-4" />
+                  Submit Answer
+                </button>
+              ) : currentIndex === questions.length - 1 ? (
+                <button
+                  onClick={handleSubmitQuiz}
+                  className="flex items-center gap-2 px-6 py-2.5 bg-green-600 text-white rounded-lg hover:bg-green-700 transition shadow-md"
+                >
+                  Submit Quiz
+                </button>
+              ) : (
+                <button
+                  onClick={handleNext}
+                  className="flex items-center gap-2 px-6 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition shadow-md"
+                >
+                  Next
+                  <ArrowRight className="w-4 h-4" />
+                </button>
+              )}
+            </div>
           </div>
         </div>
 
