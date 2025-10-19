@@ -61,28 +61,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const signUp = async (email: string, password: string, fullName: string, role: 'admin' | 'student') => {
-    const { data: authData, error: authError } = await supabase.auth.signUp({
+    // Pass user data as metadata so the database trigger can create the profile
+    const { error: authError } = await supabase.auth.signUp({
       email,
       password,
+      options: {
+        data: {
+          full_name: fullName,
+          role: role,
+        }
+      }
     });
 
     if (authError) {
       return { error: authError };
     }
 
-    if (authData.user) {
-      const { error: profileError } = await supabase
-        .from('users_profile')
-        .insert({
-          user_id: authData.user.id,
-          full_name: fullName,
-          role: role,
-        });
-
-      if (profileError) {
-        return { error: profileError as unknown as AuthError };
-      }
-    }
+    // The profile is now created automatically by the database trigger
+    // No need to manually insert into users_profile table
 
     return { error: null };
   };
